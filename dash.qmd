@@ -1,0 +1,354 @@
+---
+title: "Clima em Uberlândia"
+format: dashboard
+server: shiny
+theme: united
+---
+<style>
+    .valuebox{
+      color: white;
+    }
+    .navbar {
+        background-color: #274862
+    }
+    .quarto-dashboard #quarto-dashboard-header .navbar .navbar-nav .active {
+        background-color: #274862
+    }
+    .quarto-dashboard #quarto-dashboard-header .navbar .navbar-nav .active {
+        border-bottom: 3px solid #fdfefe;
+    }
+</style>
+```{r, include = FALSE}
+#| context: setup
+library(zoo)
+library(plotly)
+library(lubridate)
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(shinyjs)
+
+files <- list.files(pattern = "*.csv")
+
+df <- files %>%
+  map_df(~read.csv(.x, sep=";") %>% mutate(file = .x))
+
+ab <- df[df$Temp..Ins...C. != "", ]
+ab$Temp..Ins...C. <- gsub(",",".", ab$Temp..Ins...C.)
+ab$Temp..Max...C. <- gsub(",", ".", ab$Temp..Max...C.)
+ab$Temp..Min...C. <- gsub(",", ".", ab$Temp..Min...C.)
+
+ab$Chuva..mm. <- gsub(",",".", ab$Chuva..mm.)
+
+ab$Umi..Ins..... <- gsub(",",".", ab$Umi..Ins.....)
+ab$Umi..Max..... <- gsub(",",".", ab$Umi..Max.....)
+ab$Umi..Min..... <- gsub(",",".", ab$Umi..Min.....)
+
+ab$Temp..Ins...C. <- as.numeric(ab$Temp..Ins...C.)
+ab$Temp..Max...C. <- as.numeric(ab$Temp..Max...C.)
+ab$Temp..Min...C. <- as.numeric(ab$Temp..Min...C.)
+
+ab$Chuva..mm. <- as.numeric(ab$Chuva..mm.)
+ab$Umi..Ins..... <- as.numeric(ab$Umi..Ins.....)
+ab$Umi..Max..... <- as.numeric(ab$Umi..Max.....)
+ab$Umi..Min..... <- as.numeric(ab$Umi..Min.....)
+
+tempu_valor <- paste0(tail(ab$Temp..Ins...C., 1), "ºC")
+umiu_valor <- tail(ab$Umi..Ins....., 1)
+chuvu_valor <- paste0(tail(ab$Chuva..mm., 1), "mm")
+ventu_valor <- paste0(tail(ab$Vel..Vento..m.s., 1), "m/s")
+
+ab$Data <- as.Date(ab$Data, format = "%d/%m/%Y")
+ab$anomes<- as.yearmon(ab$Data)
+
+format_hour <- function(hour) {
+  sprintf("%02d:%02d:00", hour %/% 100, hour %% 100)
+}
+
+ab <- ab %>%
+  mutate(hora_formatada = format_hour(Hora..UTC.),
+         data_hora = ymd_hms(paste(Data, hora_formatada)))
+
+ab$Temp..Max...C.[is.na(ab$Temp..Max...C.)] <- ab$Temp..Ins...C.[is.na(ab$Temp..Max...C.)] + 0.4
+ab$Temp..Min...C.[is.na(ab$Temp..Min...C.)] <- ab$Temp..Ins...C.[is.na(ab$Temp..Min...C.)] - 0.4
+
+aggregate_data <- function(df, time_period) {
+  df %>%
+    group_by(period = floor_date(data_hora, unit = time_period)) %>%
+    summarize(Temp..Ins...C. = mean(Temp..Ins...C., na.rm = TRUE),
+              Temp..Max...C. = mean(Temp..Max...C., na.rm = TRUE),
+              Temp..Min...C. = mean(Temp..Min...C., na.rm = TRUE),
+              Chuva..mm. = round(sum(Chuva..mm., na.rm = TRUE),1)
+              ) %>%
+    ungroup()
+}
+
+url <- "https://www.cptec.inpe.br/previsao-tempo/mg/uberlandia"
+page <- read_html(url)
+
+temperaturas <- page %>%
+  html_elements(".col-md-2") %>%
+  html_text2() %>%
+  str_replace_all("\n", ", ") %>%
+  str_replace_all(" ", "") %>%
+  str_extract("\\d+°\\,\\d+°")
+  
+temperaturas <- str_split(temperaturas, ",")
+temperaturas <- as.data.frame(do.call(rbind, temperaturas))
+colnames(temperaturas) <- c("min", "max")
+temperaturas$data <- seq.Date(as.Date(Sys.Date()), length.out = nrow(temperaturas), by = "day")
+temperaturas$min <- as.numeric(str_replace(temperaturas$min, "°", ""))
+temperaturas$max <- as.numeric(str_replace(temperaturas$max, "°", ""))
+temperaturas$media <- (temperaturas$min + temperaturas$max) / 2
+
+
+```
+
+# Hoje
+
+## Row
+
+::: {.valuebox icon="thermometer-half" color="#995052"}
+Temperatura
+
+`r tempu_valor`
+:::
+
+
+::: {.valuebox icon="moisture" color="#D96831"}
+Umidade
+
+`r umiu_valor`
+:::
+
+::: {.valuebox icon="cloud-rain" color="#172C3C"}
+Chuva
+
+`r chuvu_valor`
+:::
+
+::: {.valuebox icon="wind" color="#274862"}
+Vento
+
+`r ventu_valor`
+:::
+
+## Row
+
+```{r}
+plot_ly(temperaturas, x = ~data) %>%
+  add_ribbons(ymin = ~media, ymax = ~max, name = "Média a Máxima", fillcolor = "rgba(217, 104, 49, 0.3)", line = list(color = "rgba(217, 104, 49, 0)")) %>%
+  add_ribbons(ymin = ~min, ymax = ~media, name = "Mínima a Média", fillcolor = "rgba(39, 72, 98, 0.3)", line = list(color = "rgba(39, 72, 98, 0)")) %>%
+  add_lines(y = ~min, name = "Temperatura Mínima", line = list(color = "#274862", width = 5)) %>%
+  add_lines(y = ~max, name = "Temperatura Máxima", line = list(color = "#D96831", width = 5)) %>%
+  add_lines(y = ~media, name = "Temperatura Média", line = list(color = "grey", width = 5)) %>%
+  add_markers(y = ~min, name = "Mínima (pontos)", marker = list(color = "#274862", size = 10), hoverinfo = "text", text = ~paste("Data: ", data, "<br>Temperatura Mínima: ", min, "°C")) %>%
+  add_markers(y = ~max, name = "Máxima (pontos)", marker = list(color = "#D96831", size = 10), hoverinfo = "text", text = ~paste("Data: ", data, "<br>Temperatura Máxima: ", max, "°C")) %>%
+  add_markers(y = ~media, name = "Média (pontos)", marker = list(color = "grey", size = 10), hoverinfo = "text", text = ~paste("Data: ", data, "<br>Temperatura Média: ", media, "°C")) %>%
+  layout(
+    title = list(
+      text = "Previsão de temperatura para os próximos dias",
+      y = 0.98
+    ),
+    xaxis = list(title = FALSE, showgrid = FALSE),
+    yaxis = list(title = 'Temperatura Média (C)', showgrid = FALSE),
+    plot_bgcolor = 'transparent', 
+    paper_bgcolor = 'transparent', 
+    showlegend = FALSE, 
+    legend = FALSE, 
+    font = list(color = "black", size = 18),
+    annotations = list(
+      list(
+        x = ~data[length(data)],
+        y = ~min[length(min)],
+        text = ' Temperatura Mínima',
+        xanchor = 'left',
+        showarrow = FALSE,
+        font = list(color = "#274862", size = 18)
+      ),
+      list(
+        x = ~data[length(data)],
+        y = ~max[length(max)],
+        text = ' Temperatura Máxima',
+        xanchor = 'left',
+        showarrow = FALSE,
+        font = list(color = "#D96831", size = 18)
+      ),
+      list(
+        x = ~data[length(data)],
+        y = ~media[length(media)],
+        text = ' Temperatura Média',
+        xanchor = 'left',
+        showarrow = FALSE,
+        font = list(color = "grey", size = 18)
+      )
+    )
+  )
+
+```
+
+# Histórico
+
+## Row
+
+### {.sidebar}
+
+```{r}
+shinyjs::useShinyjs()
+
+selectInput("period", "Selecione o Agrupamento:", choices = c("Ano" = "year", "Mês" = "month", "Dia" = "day"), selected = "year")
+
+hidden(selectInput("mes", "Disponível quando selecionar Mês ou Dia:", choices = NULL))
+
+```
+
+
+### Column
+
+```{r}
+plotlyOutput("tempPlot")
+
+```
+
+```{r}
+plotlyOutput("chuvaPlot")
+
+```
+
+
+```{r}
+#| context: server
+library(shiny)
+library(shinyjs)
+shinyjs::useShinyjs()
+
+observeEvent(input$period, {
+  if (input$period == "year") {
+    shinyjs::hide("mes")
+  } else {
+    shinyjs::show("mes")
+  }
+})
+
+df_filtrado <- reactiveVal()
+
+  observeEvent(input$period, {
+    df_aggregated <- aggregate_data(ab, input$period)
+    
+    if (input$period == "year") {
+      df_aggregated$period <- df_aggregated$period %>% year()
+      updateSelectInput(session, "mes", choices = "")
+      df_filtrado(df_aggregated)
+    
+    } else if (input$period == "day") {
+      df_aggregated$anomes <- df_aggregated$period %>% as.yearmon()
+      updateSelectInput(session, "mes", "Selecione o Mês:", 
+                        choices = unique(df_aggregated$anomes), 
+                        selected = tail(df_aggregated$anomes, 1)
+      )
+    
+    } else if (input$period == "month") {
+      df_aggregated$anomes <- df_aggregated$period %>% year()
+      df_aggregated$period <- df_aggregated$period %>% month(label = TRUE)
+      updateSelectInput(session, "mes", "Selecione o Ano:", 
+                        choices = unique(df_aggregated$anomes),
+                        selected = tail(df_aggregated$anomes, 1)
+      )
+    }
+  })
+
+  observeEvent(input$mes, {
+    df_aggregated <- aggregate_data(ab, input$period)
+    
+    if (input$period == "day") {
+      df_aggregated$anomes <- df_aggregated$period %>% as.yearmon()
+      df_aggregated$period <- df_aggregated$period %>% day()
+      df_filtrado(df_aggregated %>% filter(anomes == input$mes))
+    
+    } else if (input$period == "month") {
+      df_aggregated$anomes <- df_aggregated$period %>% year()
+      df_aggregated$period <- df_aggregated$period %>% month(label = TRUE)
+      df_filtrado(df_aggregated %>% filter(anomes == input$mes))
+    }
+  })
+
+  output$tempPlot <- renderPlotly({
+    df <- df_filtrado()
+    req(df)
+  
+    ultimo_periodo <- tail(df$period, n = 1)
+    ultima_temp_inst <- tail(df$Temp..Ins...C., n = 1)
+    ultima_temp_max <- tail(df$Temp..Max...C., n = 1)
+    ultima_temp_min <- tail(df$Temp..Min...C., n = 1)
+  
+    plot_ly(df, x = ~period) %>%
+      add_lines(y = ~Temp..Ins...C., name = 'Temperatura Instantânea', line = list(color = "grey", width = 5)) %>%
+      add_lines(y = ~Temp..Max...C., name = 'Temperatura Máxima', line = list(color = "#D96831", width = 5)) %>%
+      add_lines(y = ~Temp..Min...C., name = 'Temperatura Mínima', line = list(color = "#274862", width = 5)) %>%
+      layout(
+        title = list(
+          text = "Temperatura Média ao longo do tempo",
+          y = 0.98
+        ),
+        xaxis = list(title = FALSE, showgrid = FALSE),
+        yaxis = list(title = 'Temperatura Média (C)', showgrid = FALSE),
+        plot_bgcolor = 'transparent', 
+        paper_bgcolor = 'transparent', 
+        showlegend = FALSE, 
+        legend = list(font = list(color = "black")), 
+        font = list(color = "black", size = 16),
+        annotations = list(
+          list(
+            x = ultimo_periodo,
+            y = ultima_temp_inst,
+            text = 'Temperatura Instantânea',
+            xanchor = 'left',
+            showarrow = FALSE,
+            font = list(color = "grey", size = 16)
+          ),
+          list(
+            x = ultimo_periodo,
+            y = ultima_temp_max,
+            text = 'Temperatura Máxima',
+            xanchor = 'left',
+            showarrow = FALSE,
+            font = list(color = "#D96831", size = 16)
+          ),
+          list(
+            x = ultimo_periodo,
+            y = ultima_temp_min,
+            text = 'Temperatura Mínima',
+            xanchor = 'left',
+            showarrow = FALSE,
+            font = list(color = "#274862", size = 16)
+          )
+        )
+      )
+  })
+
+
+# quero fazer um gráfico de barras da chuva que respeite os filtros da df_filtrada
+
+  output$chuvaPlot <- renderPlotly({
+    df <- df_filtrado()
+    req(df)
+    
+    plot_ly(df, x = ~period, y = ~Chuva..mm., type = 'bar', 
+    marker = list(color = "#172C3C"),text = ~Chuva..mm.,textposition = "auto") %>%
+      layout(
+        title = list(
+          text = "Quantidade de chuva ao longo do tempo",
+          y = 0.98
+        ),
+        
+        xaxis = list(title = FALSE, showgrid = FALSE),
+        yaxis = list(title = 'Chuva (mm)', showgrid = FALSE, tickvals = NULL),
+        plot_bgcolor = 'transparent', 
+        paper_bgcolor = 'transparent', 
+        showlegend = FALSE, 
+        legend = list(font = list(color = "black")), 
+        font = list(color = "black", size = 16)
+      )
+  })
+
+```
