@@ -47,7 +47,7 @@ jobs:
       # Commit all changed files back to the repository
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
-            commit_message: data updated $NOW
+            commit_message: data updated ${{ NOW }}
 
   deploy-shiny:
     needs: updade-data
