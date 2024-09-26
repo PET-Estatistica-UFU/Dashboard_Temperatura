@@ -87,9 +87,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Render Quarto Project
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          to: html # If set, it will be equivalent to `quarto render --to html`
+        run: quarto render dash.qmd
 
       # deploy
       - name: deploy
