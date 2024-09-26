@@ -83,7 +83,7 @@ aggregate_data <- function(df, time_period) {
     ungroup()
 }
 
-temperaturas <- readRDS("temperaturas.rds")
+temperaturas <- readRDS("temperaturas2.rds")
 
 ```
 
