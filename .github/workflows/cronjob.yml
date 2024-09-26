@@ -52,6 +52,10 @@ jobs:
   deploy-shiny:
     needs: updade-data
     runs-on: ubuntu-latest
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the
+      # added or changed files to the repository.
+      contents: write
     steps:
       # that installs R on the machine
       - name: Set up R
@@ -81,6 +85,11 @@ jobs:
       # to access the code inside our repository
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Render and Publish
+        uses: quarto-dev/quarto-actions/publish@v2
+        with:
+          target: main
 
       # deploy
       - name: deploy
