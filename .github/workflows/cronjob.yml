@@ -68,17 +68,16 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          Rscript -e 'install.packages("pak")'
-          Rscript -e 'pak::pkg_install("rsconnect")'
-          Rscript -e 'pak::pkg_install("shiny")'
-          Rscript -e 'pak::pkg_install("ggplot2")'
-          Rscript -e 'pak::pkg_install("stringr")'
-          Rscript -e 'pak::pkg_install("zoo")'
-          Rscript -e 'pak::pkg_install("plotly")'
-          Rscript -e 'pak::pkg_install("lubridate")'
-          Rscript -e 'pak::pkg_install("tidyverse")'
-          Rscript -e 'pak::pkg_install("rvest")'
-          Rscript -e 'pak::pkg_install("shinyjs")'
+          Rscript -e 'install.packages("rsconnect")'
+          Rscript -e 'install.packages("shiny")'
+          Rscript -e 'install.packages("ggplot2")'
+          Rscript -e 'install.packages("stringr")'
+          Rscript -e 'install.packages("zoo")'
+          Rscript -e 'install.packages("plotly")'
+          Rscript -e 'install.packages("lubridate")'
+          Rscript -e 'install.packages("tidyverse")'
+          Rscript -e 'install.packages("rvest")'
+          Rscript -e 'install.packages("shinyjs")'
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
