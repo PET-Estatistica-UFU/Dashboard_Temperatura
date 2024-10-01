@@ -1,6 +1,6 @@
 on:
   schedule: 
-    - cron:  "20 13 * * *" 
+    - cron:  "0 4 * * *" 
   workflow_dispatch:
 
 
@@ -39,33 +39,6 @@ jobs:
       - name: Import data
         run: Rscript -e 'source("scraping.R")'
 
-      - name: Set current date as env variable
-        run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
-      - name: Echo current date
-        run: echo $NOW 
-
-      # Commit all changed files back to the repository
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-            commit_message: data updated ${{ env.NOW }}
-
-  deploy-shiny:
-    needs: updade-data
-    runs-on: ubuntu-latest
-    permissions:
-      # Give the default GITHUB_TOKEN write permission to commit and push the
-      # added or changed files to the repository.
-      contents: write
-    steps:
-      # that installs R on the machine
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          # The R version to download (if necessary) and use.
-          r-version: '4.3.2'
-          # uses the RStudio Package Manager
-          use-public-rspm: true
-
       - name: Install Dependencies
         run: |
           Rscript -e 'install.packages("rsconnect")'
@@ -81,10 +54,6 @@ jobs:
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
-      
-      # to access the code inside our repository
-      - name: Check out repository
-        uses: actions/checkout@v4
 
       - name: Render Quarto Project
         run: quarto render dash.qmd
@@ -96,3 +65,13 @@ jobs:
           NAME: ${{ vars.NAME }}
           TOKEN: ${{ secrets.TOKEN }}
           SECRET: ${{ secrets.SECRET }}
+
+      - name: Set current date as env variable
+        run: echo "NOW=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+      - name: Echo current date
+        run: echo $NOW 
+
+      # Commit all changed files back to the repository
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+            commit_message: data updated ${{ env.NOW }}
